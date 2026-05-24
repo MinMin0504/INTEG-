@@ -281,6 +281,43 @@
             </article>
           </div>
 
+          <!-- ═══════ MFA SECURITY SETTINGS ═══════ -->
+          <div class="mfa-card glass-panel" id="mfaCard">
+            <div class="mfa-card__header">
+              <div class="mfa-card__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/><circle cx="12" cy="16" r="1"/></svg>
+              </div>
+              <div>
+                <h4 class="mfa-card__title">Two-Factor Authentication (MFA)</h4>
+                <p class="mfa-card__sub">Use an authenticator app like Google Authenticator, Authy, or Microsoft Authenticator</p>
+              </div>
+              <span class="mfa-status-badge" id="mfaStatusBadge">
+                <span class="status-dot"></span> Disabled
+              </span>
+            </div>
+
+            <!-- Step 0: Enable / Disable buttons -->
+            <div class="mfa-actions" id="mfaActions">
+              <button type="button" class="btn-orange btn-orange--sm" id="mfaEnableBtn">Enable MFA</button>
+              <button type="button" class="btn-ghost btn-ghost--danger" id="mfaDisableBtn" style="display:none">Disable MFA</button>
+            </div>
+
+            <!-- Step 1: QR code display -->
+            <div class="mfa-enroll-step" id="mfaEnrollStep" style="display:none">
+              <p class="mfa-step-label">1 · Scan this QR code with your authenticator app</p>
+              <div class="mfa-qr-wrap" id="mfaQrWrap">
+                <p class="muted">Generating QR code…</p>
+              </div>
+              <p class="mfa-step-label">2 · Enter the 6-digit verification code from your app</p>
+              <div class="mfa-verify-row">
+                <input type="text" id="mfaEnrollCode" maxlength="6" placeholder="000000" inputmode="numeric" class="mfa-code-input" />
+                <button type="button" class="btn-orange" id="mfaVerifyBtn">Verify & activate</button>
+              </div>
+              <button type="button" class="btn-ghost" id="mfaCancelBtn">Cancel</button>
+              <p id="mfaEnrollError" class="login-error"></p>
+            </div>
+          </div>
+
           <div class="quick-links">
             <button data-target="compliance-checker" class="quick-nav">Compliance workspace</button>
             <button data-target="audit-log" class="quick-nav btn-ghost--outline">Audit log</button>

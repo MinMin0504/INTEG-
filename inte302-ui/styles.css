@@ -1452,3 +1452,181 @@ button {
   background: rgba(255, 107, 107, 0.15);
   color: var(--danger);
 }
+
+/* ——— MFA Card ——— */
+.mfa-card {
+  margin-top: 1rem;
+  padding: 1.25rem 1.5rem;
+}
+
+.mfa-card__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.mfa-card__icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(255, 107, 44, 0.15);
+  color: var(--orange);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.mfa-card__icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.mfa-card__title {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.mfa-card__sub {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.mfa-status-badge {
+  margin-left: auto;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.mfa-status-badge.is-active {
+  background: rgba(74, 222, 128, 0.12);
+  color: var(--ok);
+  border-color: rgba(74, 222, 128, 0.3);
+}
+
+.mfa-status-badge.is-active .status-dot {
+  background: var(--ok);
+  box-shadow: 0 0 8px rgba(74, 222, 128, 0.5);
+}
+
+.mfa-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.btn-ghost--danger {
+  color: var(--danger) !important;
+  border-color: rgba(255, 107, 107, 0.3) !important;
+}
+
+.btn-ghost--danger:hover {
+  background: rgba(255, 107, 107, 0.1) !important;
+}
+
+.mfa-enroll-step {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.mfa-step-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 0.75rem;
+}
+
+.mfa-qr-wrap {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 1.5rem;
+  margin-bottom: 1.25rem;
+  background: #fff;
+  border-radius: var(--radius-sm);
+  min-height: 200px;
+}
+
+.mfa-qr-wrap img {
+  max-width: 200px;
+  max-height: 200px;
+  image-rendering: pixelated;
+}
+
+.mfa-verify-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.mfa-code-input {
+  width: 160px;
+  height: 48px;
+  padding: 0 1rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--text);
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: 0.35em;
+  text-align: center;
+  font-family: 'Inter', monospace;
+}
+
+.mfa-code-input:focus {
+  outline: none;
+  border-color: rgba(255, 107, 44, 0.55);
+  box-shadow: 0 0 0 3px var(--orange-glow);
+}
+
+.mfa-verify-row .btn-orange {
+  padding: 0.65rem 1.25rem;
+  white-space: nowrap;
+}
+
+/* ——— Login MFA step state ——— */
+.login-form.mfa-step label[for="login-user"],
+.login-form.mfa-step #login-user,
+.login-form.mfa-step label[for="login-pass"],
+.login-form.mfa-step #login-pass {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.login-form.mfa-step label[for="login-mfa"] {
+  color: var(--orange);
+  animation: mfaPulse 2s ease-in-out infinite;
+}
+
+.login-form.mfa-step #login-mfa {
+  border-color: rgba(255, 107, 44, 0.55);
+  box-shadow: 0 0 0 3px var(--orange-glow);
+  font-size: 1.15rem;
+  letter-spacing: 0.25em;
+  text-align: center;
+  font-weight: 700;
+}
+
+@keyframes mfaPulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.65; }
+}
+

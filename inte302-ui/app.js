@@ -102,14 +102,49 @@ if (goReportsBtn) goReportsBtn.addEventListener('click', () => setActiveSection(
 //  AUTHENTICATION
 // ════════════════════════════════════════════════════════════════
 
+let _mfaPendingFactorId = null; // tracks if we're in the MFA-verify step
+
 loginForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const emailEl = $('#login-user');
   const passEl = $('#login-pass');
+  const mfaEl = $('#login-mfa');
   const btn = loginForm.querySelector('button[type="submit"]');
   const email = emailEl.value.trim();
   const pass = passEl.value;
+  const mfaCode = mfaEl ? mfaEl.value.trim() : '';
 
+  // ── Step 2: MFA verification ──────────────────────────────────
+
+  if (_mfaPendingFactorId) {
+    if (!mfaCode || mfaCode.length !== 6) {
+      showToast('Please enter the 6-digit code from your authenticator app.', 'error');
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = 'Verifying MFA…';
+    if (loginError) loginError.textContent = '';
+
+    const { verified, error: mfaErr } = await Auth.verifyMfa(_mfaPendingFactorId, mfaCode);
+    btn.disabled = false;
+
+    if (mfaErr || !verified) {
+      btn.textContent = 'Verify & sign in';
+      if (loginError) loginError.textContent = mfaErr || 'Invalid code. Please try again.';
+      showToast(mfaErr || 'Invalid MFA code.', 'error');
+      return;
+    }
+
+    // MFA passed — complete login
+    _mfaPendingFactorId = null;
+    loginForm.classList.remove('mfa-step');
+    btn.textContent = 'Sign in securely';
+    const profile = Auth.getCurrentUser() || await Auth.restoreSession();
+    enterSystem(profile);
+    return;
+  }
+
+  // ── Step 1: Email / password ──────────────────────────────────
   if (!email || !pass) {
     showToast('Please enter email and password.', 'error');
     return;
@@ -130,6 +165,40 @@ loginForm.addEventListener('submit', async (e) => {
     return;
   }
 
+  // Check for enrolled MFA factors
+  const { factors } = await Auth.getMfaFactors();
+
+  if (factors.length > 0) {
+    _mfaPendingFactorId = factors[0].id;
+
+    // If the user already typed a 6-digit code, try verifying immediately!
+    if (mfaCode && mfaCode.length === 6) {
+      btn.textContent = 'Verifying MFA…';
+      const { verified, error: mfaErr } = await Auth.verifyMfa(_mfaPendingFactorId, mfaCode);
+      if (verified && !mfaErr) {
+        _mfaPendingFactorId = null;
+        btn.textContent = 'Sign in securely';
+        enterSystem(Auth.getCurrentUser() || await Auth.restoreSession());
+        return;
+      }
+      // If invalid, fall through to show the error and the MFA UI step
+      showToast(mfaErr || 'Invalid MFA code.', 'error');
+      if (loginError) loginError.textContent = mfaErr || 'Invalid code. Please try again.';
+    } else {
+      showToast('Enter the 6-digit code from your authenticator app.', 'info');
+    }
+
+    // Show step 2 UI (dims email/pass, highlights MFA input)
+    loginForm.classList.add('mfa-step');
+    btn.textContent = 'Verify & sign in';
+    if (mfaEl) {
+      mfaEl.focus();
+      mfaEl.setAttribute('required', '');
+    }
+    return;
+  }
+
+  // No MFA — go straight in
   enterSystem(user);
 });
 
@@ -204,6 +273,7 @@ async function loadDashboard() {
 
   renderTrendBars();
   renderCalendar();
+  refreshMfaStatus();
 }
 
 function renderRecentReports(reports) {
@@ -303,6 +373,131 @@ function renderCalendar() {
   const remainder = cells.length % 7;
   if (remainder) for (let d = 1; d <= 7 - remainder; d++) cells.push(`<span class="calendar-day muted">${d}</span>`);
   calendarGrid.innerHTML = cells.join('');
+}
+
+// ════════════════════════════════════════════════════════════════
+//  MFA MANAGEMENT (Dashboard)
+// ════════════════════════════════════════════════════════════════
+
+const mfaStatusBadge = $('#mfaStatusBadge');
+const mfaEnableBtn = $('#mfaEnableBtn');
+const mfaDisableBtn = $('#mfaDisableBtn');
+const mfaEnrollStep = $('#mfaEnrollStep');
+const mfaQrWrap = $('#mfaQrWrap');
+const mfaEnrollCode = $('#mfaEnrollCode');
+const mfaVerifyBtn = $('#mfaVerifyBtn');
+const mfaCancelBtn = $('#mfaCancelBtn');
+const mfaEnrollError = $('#mfaEnrollError');
+const mfaActions = $('#mfaActions');
+
+let _enrollingFactorId = null;
+
+/** Refresh the MFA card to reflect current enrolment state. */
+async function refreshMfaStatus() {
+  if (!mfaStatusBadge) return;
+  const { factors } = await Auth.getMfaFactors();
+  const isActive = factors.length > 0;
+
+  mfaStatusBadge.className = `mfa-status-badge${isActive ? ' is-active' : ''}`;
+  mfaStatusBadge.innerHTML = `<span class="status-dot${isActive ? ' status-dot--ok' : ''}"></span> ${isActive ? 'Active' : 'Disabled'}`;
+
+  if (mfaEnableBtn) mfaEnableBtn.style.display = isActive ? 'none' : '';
+  if (mfaDisableBtn) mfaDisableBtn.style.display = isActive ? '' : 'none';
+  if (mfaEnrollStep) mfaEnrollStep.style.display = 'none';
+  if (mfaActions) mfaActions.style.display = '';
+  _enrollingFactorId = null;
+}
+
+// Enable → start enrolment
+if (mfaEnableBtn) {
+  mfaEnableBtn.addEventListener('click', async () => {
+    mfaEnableBtn.disabled = true;
+    mfaEnableBtn.textContent = 'Setting up…';
+    if (mfaEnrollError) mfaEnrollError.textContent = '';
+
+    const { factorId, qr, error } = await Auth.enrollMfa();
+    mfaEnableBtn.disabled = false;
+    mfaEnableBtn.textContent = 'Enable MFA';
+
+    if (error) {
+      showToast(error, 'error');
+      return;
+    }
+
+    _enrollingFactorId = factorId;
+
+    // Show QR
+    if (mfaQrWrap) mfaQrWrap.innerHTML = `<img src="${qr}" alt="Scan this QR code with your authenticator app" />`;
+    if (mfaActions) mfaActions.style.display = 'none';
+    if (mfaEnrollStep) mfaEnrollStep.style.display = '';
+    if (mfaEnrollCode) { mfaEnrollCode.value = ''; mfaEnrollCode.focus(); }
+  });
+}
+
+// Verify enrolment code
+if (mfaVerifyBtn) {
+  mfaVerifyBtn.addEventListener('click', async () => {
+    const code = mfaEnrollCode ? mfaEnrollCode.value.trim() : '';
+    if (!code || code.length !== 6) {
+      if (mfaEnrollError) mfaEnrollError.textContent = 'Enter the 6-digit code from your authenticator app.';
+      return;
+    }
+    if (!_enrollingFactorId) {
+      if (mfaEnrollError) mfaEnrollError.textContent = 'No pending factor. Please restart enrolment.';
+      return;
+    }
+
+    mfaVerifyBtn.disabled = true;
+    mfaVerifyBtn.textContent = 'Verifying…';
+
+    const { verified, error } = await Auth.verifyMfa(_enrollingFactorId, code);
+
+    mfaVerifyBtn.disabled = false;
+    mfaVerifyBtn.textContent = 'Verify & activate';
+
+    if (error || !verified) {
+      if (mfaEnrollError) mfaEnrollError.textContent = error || 'Verification failed. Check the code and try again.';
+      showToast(error || 'Verification failed.', 'error');
+      return;
+    }
+
+    showToast('MFA enabled! Your account is now more secure.', 'success');
+    await refreshMfaStatus();
+  });
+}
+
+// Cancel enrolment
+if (mfaCancelBtn) {
+  mfaCancelBtn.addEventListener('click', async () => {
+    // Unenroll the pending factor if we have one
+    if (_enrollingFactorId) {
+      await Auth.unenrollMfa(_enrollingFactorId);
+    }
+    _enrollingFactorId = null;
+    if (mfaEnrollStep) mfaEnrollStep.style.display = 'none';
+    if (mfaActions) mfaActions.style.display = '';
+  });
+}
+
+// Disable MFA
+if (mfaDisableBtn) {
+  mfaDisableBtn.addEventListener('click', async () => {
+    const ok = await confirmDialog('Disable MFA', 'This will remove two-factor authentication from your account. Continue?');
+    if (!ok) return;
+
+    mfaDisableBtn.disabled = true;
+    mfaDisableBtn.textContent = 'Disabling…';
+
+    const { factors } = await Auth.getMfaFactors();
+    for (const f of factors) {
+      await Auth.unenrollMfa(f.id);
+    }
+
+    mfaDisableBtn.disabled = false;
+    mfaDisableBtn.textContent = 'Disable MFA';
+    showToast('MFA has been disabled.', 'info');
+    await refreshMfaStatus();
+  });
 }
 
 // ════════════════════════════════════════════════════════════════

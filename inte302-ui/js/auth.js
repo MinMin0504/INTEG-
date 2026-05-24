@@ -118,16 +118,27 @@ export async function resetPassword(email) {
  */
 export async function enrollMfa() {
   try {
-    const { data, error } = await supabase.auth.mfa.enroll({ factorType: 'totp' });
-    if (error) return { qr: null, error: error.message };
-    // Update profile flag
-    if (_currentUser) {
-      await supabase.from('users').update({ mfa_enabled: true }).eq('id', _currentUser.id);
-      _currentUser.mfa_enabled = true;
+    // 1. Clean up any stuck unverified factors first
+    const { data: factorList } = await supabase.auth.mfa.listFactors();
+    if (factorList && factorList.totp) {
+      const unverified = factorList.totp.filter(f => f.status === 'unverified');
+      for (const f of unverified) {
+        await supabase.auth.mfa.unenroll({ factorId: f.id });
+      }
     }
-    return { qr: data.totp.qr_code, error: null };
+
+    // 2. Enroll a fresh factor
+    const { data, error } = await supabase.auth.mfa.enroll({ 
+      factorType: 'totp',
+      friendlyName: `AuthenticatorApp-${Date.now()}`
+    });
+    
+    if (error) return { factorId: null, qr: null, error: error.message };
+    
+    // Return the factor ID so the caller can use it for verification
+    return { factorId: data.id, qr: data.totp.qr_code, error: null };
   } catch (err) {
-    return { qr: null, error: err.message };
+    return { factorId: null, qr: null, error: err.message };
   }
 }
 
@@ -150,6 +161,11 @@ export async function verifyMfa(factorId, code) {
       return { verified: false, error: error.message };
     }
     await logAuditEvent(AUDIT_MODULES.AUTH, 'MFA verification succeeded', 'Success');
+    // Update profile flag now that MFA is confirmed
+    if (_currentUser) {
+      await supabase.from('users').update({ mfa_enabled: true }).eq('id', _currentUser.id);
+      _currentUser.mfa_enabled = true;
+    }
     return { verified: true, error: null };
   } catch (err) {
     return { verified: false, error: err.message };
@@ -179,6 +195,42 @@ export async function restoreSession() {
 export function onAuthStateChange(callback) {
   const { data } = supabase.auth.onAuthStateChange(callback);
   return data.subscription;
+}
+
+/**
+ * List the current user's enrolled MFA factors.
+ * @returns {Promise<{factors: Array, error: string|null}>}
+ */
+export async function getMfaFactors() {
+  try {
+    const { data, error } = await supabase.auth.mfa.listFactors();
+    if (error) return { factors: [], error: error.message };
+    // Only return verified TOTP factors
+    const totp = (data.totp || []).filter(f => f.status === 'verified');
+    return { factors: totp, error: null };
+  } catch (err) {
+    return { factors: [], error: err.message };
+  }
+}
+
+/**
+ * Unenroll an MFA factor.
+ * @param {string} factorId
+ * @returns {Promise<{error: string|null}>}
+ */
+export async function unenrollMfa(factorId) {
+  try {
+    const { error } = await supabase.auth.mfa.unenroll({ factorId });
+    if (error) return { error: error.message };
+    if (_currentUser) {
+      await supabase.from('users').update({ mfa_enabled: false }).eq('id', _currentUser.id);
+      _currentUser.mfa_enabled = false;
+    }
+    await logAuditEvent(AUDIT_MODULES.AUTH, 'MFA unenrolled', 'Success');
+    return { error: null };
+  } catch (err) {
+    return { error: err.message };
+  }
 }
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
